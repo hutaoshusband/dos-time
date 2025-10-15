@@ -2,17 +2,17 @@
 #include <winreg.h>
 #include <shlwapi.h>
 
-// Registrierungspfad für den Benutzer-Autostart
+// Registrierungspfad fÃ¼r den Benutzer-Autostart
 const wchar_t* const RUN_KEY_PATH = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
 // Name des Eintrags in der Registrierung
 const wchar_t* const APP_REG_NAME = L"OldSchoolClock";
 
 /**
- * Überprüft, ob die Anwendung bereits in den Autostart-Einstellungen des Benutzers eingetragen ist.
+ * ÃœberprÃ¼ft, ob die Anwendung bereits in den Autostart-Einstellungen des Benutzers eingetragen ist.
  */
 BOOL IsInStartup() {
     HKEY hKey;
-    // Öffnet den Run-Schlüssel mit Lesezugriff
+    // Ã–ffnet den Run-SchlÃ¼ssel mit Lesezugriff
     LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY_PATH, 0, KEY_READ, &hKey);
     if (result != ERROR_SUCCESS) {
         return FALSE;
@@ -29,11 +29,11 @@ BOOL IsInStartup() {
 }
 
 /**
- * Fügt den Pfad der Anwendung dem Autostart-Schlüssel in der Registrierung hinzu.
+ * FÃ¼gt den Pfad der Anwendung dem Autostart-SchlÃ¼ssel in der Registrierung hinzu.
  */
 BOOL AddToStartup(const std::wstring& appPath) {
     HKEY hKey;
-    // Öffnet den Run-Schlüssel mit Schreibzugriff
+    // Ã–ffnet den Run-SchlÃ¼ssel mit Schreibzugriff
     LONG result = RegOpenKeyExW(HKEY_CURRENT_USER, RUN_KEY_PATH, 0, KEY_SET_VALUE, &hKey);
     if (result != ERROR_SUCCESS) {
         return FALSE;

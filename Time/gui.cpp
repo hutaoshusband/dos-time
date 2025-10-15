@@ -1,6 +1,6 @@
 #include "gui.h"
 
-// Spezifische Header für diese Implementierungsdatei
+// Spezifische Header fÃ¼r diese Implementierungsdatei
 #include <wininet.h>
 #include <iphlpapi.h>
 #include <icmpapi.h>
@@ -20,7 +20,7 @@
 #pragma comment(lib, "iphlpapi.lib")
 #pragma comment(lib, "ws2_32.lib")
 
-// Handler für die benutzerdefinierte Schriftart
+// Handler fÃ¼r die benutzerdefinierte Schriftart
 HFONT g_hFont = NULL;
 
 // Countdown-Variablen
@@ -33,9 +33,9 @@ std::wstring g_inputBuffer;
 std::vector<std::wstring> g_consoleHistory;
 const std::wstring PROMPT = L"C:\\> ";
 bool g_awaitingUpdateConfirmation = false;
-int g_scrollOffset = 0; // Für Scroll-Funktionalität
+int g_scrollOffset = 0; // FÃ¼r Scroll-FunktionalitÃ¤t
 
-// Konstante für PI
+// Konstante fÃ¼r PI
 const double PI = 3.14159265358979323846;
 
 // Hilfetext mit neuen Befehlen
@@ -69,7 +69,7 @@ double DegToRad(double degrees) {
 }
 
 /**
- * Konvertiert einen String vollständig zu Großbuchstaben.
+ * Konvertiert einen String vollstÃ¤ndig zu GroÃŸbuchstaben.
  */
 std::wstring ToUpper(const std::wstring& str) {
     std::wstring s = str;
@@ -79,7 +79,7 @@ std::wstring ToUpper(const std::wstring& str) {
 }
 
 /**
- * Fügt eine oder mehrere Zeilen zum Konsolenverlauf hinzu und setzt den Scroll-Offset zurück.
+ * FÃ¼gt eine oder mehrere Zeilen zum Konsolenverlauf hinzu und setzt den Scroll-Offset zurÃ¼ck.
  */
 void AddHistory(const std::wstring& text) {
     std::wstringstream ss(text);
@@ -87,7 +87,7 @@ void AddHistory(const std::wstring& text) {
     while (std::getline(ss, line, L'\n')) {
         g_consoleHistory.push_back(line);
     }
-    g_scrollOffset = 0; // Beim Hinzufügen neuer Inhalte nach unten scrollen
+    g_scrollOffset = 0; // Beim HinzufÃ¼gen neuer Inhalte nach unten scrollen
 }
 
 // *** NEUE BEFEHLSFUNKTIONEN ***
@@ -110,7 +110,7 @@ void Ping(const std::wstring& host, HWND hWnd) {
         return;
     }
 
-    // Hostname zu IP-Adresse auflösen
+    // Hostname zu IP-Adresse auflÃ¶sen
     ADDRINFOW* result = nullptr;
     if (GetAddrInfoW(host.c_str(), NULL, NULL, &result) != 0) {
         AddHistory(L"FEHLER: Host konnte nicht aufgeloest werden.");
@@ -311,7 +311,7 @@ std::wstring GetCurrentDateString() {
 }
 
 /**
- * Führt den eingegebenen Befehl aus und aktualisiert den Verlauf.
+ * FÃ¼hrt den eingegebenen Befehl aus und aktualisiert den Verlauf.
  */
 void ProcessCommand(HWND hWnd, const std::wstring& command) {
     std::wstring trimmedCommand = command;
@@ -476,7 +476,7 @@ BOOL RegisterClockWindowClass(HINSTANCE hInstance) {
     wc.hCursor = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
     wc.lpszClassName = WINDOW_CLASS_NAME;
-    // Hier fügen Sie das Icon hinzu (nachdem Sie die Ressource erstellt haben)
+    // Hier fÃ¼gen Sie das Icon hinzu (nachdem Sie die Ressource erstellt haben)
     // wc.hIcon = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
     // wc.hIconSm = LoadIcon(hInstance, MAKEINTRESOURCE(IDI_ICON1));
     return (RegisterClassExW(&wc) != 0);
@@ -625,7 +625,7 @@ LRESULT CALLBACK ClockWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM 
         int currentLineY = lineHeight;
 
         for (int i = startLine; i < endLine; ++i) {
-            if (i < 0 || static_cast<size_t>(i) >= historySize) continue; // KORREKTUR: Typsichere Prüfung
+            if (i < 0 || static_cast<size_t>(i) >= historySize) continue; // KORREKTUR: Typsichere PrÃ¼fung
             RECT rect = { xPadding, currentLineY, clientRect.right, currentLineY + lineHeight };
             DrawTextW(hdc, g_consoleHistory[i].c_str(), -1, &rect, DT_LEFT | DT_TOP | DT_SINGLELINE | DT_NOCLIP);
             currentLineY += lineHeight;

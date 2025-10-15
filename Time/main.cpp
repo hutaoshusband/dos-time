@@ -3,7 +3,7 @@
 #include <windows.h>
 #include <string>
 
-// Die Hauptfunktion für eine Windows-GUI-Anwendung (WinMain statt main)
+// Die Hauptfunktion fÃ¼r eine Windows-GUI-Anwendung (WinMain statt main)
 int WINAPI wWinMain(
     _In_ HINSTANCE hInstance,
     _In_opt_ HINSTANCE hPrevInstance,
@@ -16,17 +16,17 @@ int WINAPI wWinMain(
 
     // 1. Autostart-Registrierung beim ersten Start
 
-    // Holt den vollständigen Pfad der aktuellen ausführbaren Datei
+    // Holt den vollstÃ¤ndigen Pfad der aktuellen ausfÃ¼hrbaren Datei
     wchar_t path[MAX_PATH];
     GetModuleFileNameW(NULL, path, MAX_PATH);
     std::wstring appPath(path);
 
-    // Überprüft, ob die App bereits im Autostart ist. Wenn nicht, wird sie hinzugefügt.
+    // ÃœberprÃ¼ft, ob die App bereits im Autostart ist. Wenn nicht, wird sie hinzugefÃ¼gt.
     if (!IsInStartup()) {
         AddToStartup(appPath);
     }
 
-    // 2. GUI-Setup und Ausführung
+    // 2. GUI-Setup und AusfÃ¼hrung
 
     // Registriert die Fensterklasse
     if (!RegisterClockWindowClass(hInstance)) {
