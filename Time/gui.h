@@ -1,5 +1,10 @@
 #pragma once
+
+// KORREKTUR: Winsock2 MUSS vor windows.h eingebunden werden, um Neudefinitionsfehler zu vermeiden.
+#include <winsock2.h>
+#include <ws2tcpip.h>
 #include <windows.h>
+
 #include <string> // Wird für std::wstring benötigt
 
 // Fensterklasse und Timer-IDs

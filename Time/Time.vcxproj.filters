@@ -24,18 +24,12 @@
     <ClCompile Include="install.cpp">
       <Filter>Quelldateien</Filter>
     </ClCompile>
-    <ClCompile Include="blocker.cpp">
-      <Filter>Quelldateien</Filter>
-    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="gui.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
     <ClInclude Include="install.h">
-      <Filter>Headerdateien</Filter>
-    </ClInclude>
-    <ClInclude Include="blocker.h">
       <Filter>Headerdateien</Filter>
     </ClInclude>
   </ItemGroup>
