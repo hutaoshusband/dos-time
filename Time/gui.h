@@ -9,11 +9,13 @@
 
 // Fensterklasse und Timer-IDs
 #define WINDOW_CLASS_NAME L"TimeClockConsoleClass"
+#define BLACKOUT_CLASS_NAME L"BlackoutClass"
 #define CLOCK_TIMER_ID 1
 #define COUNTDOWN_TIMER_ID 2
 
 // Prototypen für gui.cpp
 BOOL RegisterClockWindowClass(HINSTANCE hInstance);
+BOOL RegisterBlackoutWindowClass(HINSTANCE hInstance);
 HWND CreateClockWindow(HINSTANCE hInstance, int nCmdShow);
 LRESULT CALLBACK ClockWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 void UpdateClockDisplay(HWND hWnd);

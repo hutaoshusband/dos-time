@@ -5,6 +5,8 @@
 #include <iphlpapi.h>
 #include <icmpapi.h>
 #include <psapi.h>
+#include <tcpmib.h>
+#include <tlhelp32.h>
 #include <chrono>
 #include <ctime>
 #include <iomanip>
@@ -51,7 +53,10 @@ L"  ECHO <text>    - Gibt den angegebenen Text aus.\n"
 L"  VER            - Zeigt die Version an.\n"
 L"  VOL            - Zeigt die Datentraegerbezeichnung an.\n"
 L"  DIR            - Listet den Inhalt des aktuellen Verzeichnisses auf.\n"
-L"  TYPE <file>    - Zeigt den Inhalt einer Textdatei an.\n\n"
+L"  TYPE <file>    - Zeigt den Inhalt einer Textdatei an.\n"
+L"  HOSTNAME       - Zeigt den Computernamen an.\n"
+L"  WHOAMI         - Zeigt den aktuellen Benutzernamen an.\n"
+L"  UPTIME         - Zeigt die Systemlaufzeit an.\n\n"
 L"Netzwerk-Tools:\n"
 L"  PING <host>    - Sendet ICMP-Anfragen an einen Host.\n"
 L"  IPCONFIG       - Zeigt die Netzwerkkonfiguration an.\n"
@@ -96,6 +101,359 @@ void Ping(const std::wstring& host, HWND hWnd);
 void IpConfig(HWND hWnd);
 void TaskList(HWND hWnd);
 void SystemInfo(HWND hWnd);
+void Netstat(HWND hWnd);
+void Vol(HWND hWnd);
+void Dir(HWND hWnd);
+void Type(const std::wstring& filename, HWND hWnd);
+void Hostname(HWND hWnd);
+void Whoami(HWND hWnd);
+void Uptime(HWND hWnd);
+
+/**
+ * IPCONFIG-Implementierung
+ */
+void IpConfig(HWND hWnd) {
+    ULONG bufferSize = sizeof(IP_ADAPTER_INFO);
+    PIP_ADAPTER_INFO pAdapterInfo = (IP_ADAPTER_INFO*)malloc(bufferSize);
+    if (pAdapterInfo == NULL) {
+        AddHistory(L"FEHLER: Speicherzuweisung fehlgeschlagen.");
+        return;
+    }
+
+    if (GetAdaptersInfo(pAdapterInfo, &bufferSize) == ERROR_BUFFER_OVERFLOW) {
+        free(pAdapterInfo);
+        pAdapterInfo = (IP_ADAPTER_INFO*)malloc(bufferSize);
+        if (pAdapterInfo == NULL) {
+            AddHistory(L"FEHLER: Speicherzuweisung fehlgeschlagen.");
+            return;
+        }
+    }
+
+    if (GetAdaptersInfo(pAdapterInfo, &bufferSize) == NO_ERROR) {
+        AddHistory(L"Windows IP-Konfiguration");
+        PIP_ADAPTER_INFO pAdapter = pAdapterInfo;
+        while (pAdapter) {
+            std::string desc_s(pAdapter->Description);
+            std::string ip_s(pAdapter->IpAddressList.IpAddress.String);
+            std::string mask_s(pAdapter->IpAddressList.IpMask.String);
+            std::string gateway_s(pAdapter->GatewayList.IpAddress.String);
+
+            std::wstringstream ss;
+            ss << L"\nEthernet-Adapter " << std::wstring(desc_s.begin(), desc_s.end()) << L":\n";
+            ss << L"  IP-Adresse. . . . . . . . . . . : " << std::wstring(ip_s.begin(), ip_s.end()) << L"\n";
+            ss << L"  Subnetzmaske. . . . . . . . . . : " << std::wstring(mask_s.begin(), mask_s.end()) << L"\n";
+            ss << L"  Standardgateway . . . . . . . . : " << std::wstring(gateway_s.begin(), gateway_s.end());
+            AddHistory(ss.str());
+            pAdapter = pAdapter->Next;
+        }
+    }
+    else {
+        AddHistory(L"FEHLER: Netzwerkinformationen konnten nicht abgerufen werden.");
+    }
+
+    if (pAdapterInfo) {
+        free(pAdapterInfo);
+    }
+}
+
+void SystemInfo(HWND hWnd) {
+    SYSTEM_INFO sysInfo;
+    GetSystemInfo(&sysInfo);
+
+    OSVERSIONINFOEXW osInfo;
+    osInfo.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEXW);
+#pragma warning(suppress : 4996)
+    GetVersionExW((LPOSVERSIONINFOW)&osInfo);
+
+    MEMORYSTATUSEX memStatus;
+    memStatus.dwLength = sizeof(memStatus);
+    GlobalMemoryStatusEx(&memStatus);
+
+    std::wstringstream ss;
+    ss << L"Systeminformationen:\n";
+    ss << L"  Betriebssystem: Windows (Version " << osInfo.dwMajorVersion << L"." << osInfo.dwMinorVersion << L")\n";
+    ss << L"  Prozessortyp: " << sysInfo.dwProcessorType << L"\n";
+    ss << L"  Anzahl der Prozessoren: " << sysInfo.dwNumberOfProcessors << L"\n";
+    ss << L"  Speicher (RAM): " << memStatus.ullTotalPhys / (1024 * 1024) << L" MB";
+    AddHistory(ss.str());
+}
+
+void TaskList(HWND hWnd) {
+    AddHistory(L"Abbildname              PID");
+    AddHistory(L"========================= ========");
+
+    HANDLE hProcessSnap;
+    PROCESSENTRY32W pe32;
+    hProcessSnap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+
+    if (hProcessSnap == INVALID_HANDLE_VALUE) {
+        AddHistory(L"FEHLER: Prozess-Snapshot konnte nicht erstellt werden.");
+        return;
+    }
+
+    pe32.dwSize = sizeof(PROCESSENTRY32W);
+
+    if (Process32FirstW(hProcessSnap, &pe32)) {
+        do {
+            std::wstringstream ss;
+            ss << std::left << std::setw(25) << pe32.szExeFile
+                << std::right << std::setw(8) << pe32.th32ProcessID;
+            AddHistory(ss.str());
+        } while (Process32NextW(hProcessSnap, &pe32));
+    }
+
+    CloseHandle(hProcessSnap);
+}
+
+const wchar_t* TcpStateToString(DWORD state) {
+    switch (state) {
+    case MIB_TCP_STATE_CLOSED: return L"CLOSED";
+    case MIB_TCP_STATE_LISTEN: return L"LISTEN";
+    case MIB_TCP_STATE_SYN_SENT: return L"SYN-SENT";
+    case MIB_TCP_STATE_SYN_RCVD: return L"SYN-RECEIVED";
+    case MIB_TCP_STATE_ESTAB: return L"ESTABLISHED";
+    case MIB_TCP_STATE_FIN_WAIT1: return L"FIN-WAIT-1";
+    case MIB_TCP_STATE_FIN_WAIT2: return L"FIN-WAIT-2";
+    case MIB_TCP_STATE_CLOSE_WAIT: return L"CLOSE-WAIT";
+    case MIB_TCP_STATE_CLOSING: return L"CLOSING";
+    case MIB_TCP_STATE_LAST_ACK: return L"LAST-ACK";
+    case MIB_TCP_STATE_TIME_WAIT: return L"TIME-WAIT";
+    case MIB_TCP_STATE_DELETE_TCB: return L"DELETE-TCB";
+    default: return L"UNKNOWN";
+    }
+}
+
+void Netstat(HWND hWnd) {
+    PMIB_TCPTABLE pTcpTable;
+    DWORD dwSize = 0;
+    wchar_t szLocalAddr[128];
+    wchar_t szRemoteAddr[128];
+    struct in_addr IpAddr;
+
+    pTcpTable = (MIB_TCPTABLE*)malloc(sizeof(MIB_TCPTABLE));
+    if (pTcpTable == NULL) {
+        AddHistory(L"FEHLER: Speicherzuweisung fehlgeschlagen.");
+        return;
+    }
+
+    if (GetTcpTable(pTcpTable, &dwSize, TRUE) == ERROR_INSUFFICIENT_BUFFER) {
+        free(pTcpTable);
+        pTcpTable = (MIB_TCPTABLE*)malloc(dwSize);
+        if (pTcpTable == NULL) {
+            AddHistory(L"FEHLER: Speicherzuweisung fehlgeschlagen.");
+            return;
+        }
+    }
+
+    if (GetTcpTable(pTcpTable, &dwSize, TRUE) == NO_ERROR) {
+        AddHistory(L"Aktive Verbindungen");
+        AddHistory(L"  Proto  Lokale Adresse         Remoteadresse          Status");
+
+        for (DWORD i = 0; i < pTcpTable->dwNumEntries; i++) {
+            IpAddr.S_un.S_addr = (u_long)pTcpTable->table[i].dwLocalAddr;
+            InetNtopW(AF_INET, &IpAddr, szLocalAddr, 128);
+
+            IpAddr.S_un.S_addr = (u_long)pTcpTable->table[i].dwRemoteAddr;
+            InetNtopW(AF_INET, &IpAddr, szRemoteAddr, 128);
+
+            std::wstringstream ss;
+            ss << L"  TCP    " << std::left << std::setw(21) << (std::wstring(szLocalAddr) + L":" + std::to_wstring(ntohs((u_short)pTcpTable->table[i].dwLocalPort)))
+                << std::left << std::setw(21) << (std::wstring(szRemoteAddr) + L":" + std::to_wstring(ntohs((u_short)pTcpTable->table[i].dwRemotePort)))
+                << TcpStateToString(pTcpTable->table[i].dwState);
+            AddHistory(ss.str());
+        }
+    }
+    else {
+        AddHistory(L"FEHLER: TCP-Tabelle konnte nicht abgerufen werden.");
+    }
+
+    if (pTcpTable != NULL) {
+        free(pTcpTable);
+    }
+}
+
+void Vol(HWND hWnd) {
+    wchar_t volumeName[MAX_PATH + 1] = { 0 };
+    wchar_t fileSystemName[MAX_PATH + 1] = { 0 };
+    DWORD serialNumber = 0;
+    DWORD maxComponentLen = 0;
+    DWORD fileSystemFlags = 0;
+
+    if (GetVolumeInformationW(L"C:\\", volumeName, ARRAYSIZE(volumeName), &serialNumber, &maxComponentLen, &fileSystemFlags, fileSystemName, ARRAYSIZE(fileSystemName))) {
+        std::wstringstream ss;
+        ss << L" Volume in Laufwerk C hat die Bezeichnung " << (wcslen(volumeName) > 0 ? volumeName : L"") << L".\n";
+        ss << L" Volumeseriennummer ist " << std::hex << std::uppercase << serialNumber;
+        AddHistory(ss.str());
+    }
+    else {
+        AddHistory(L"FEHLER: Volumeninformationen konnten nicht abgerufen werden.");
+    }
+}
+
+void Dir(HWND hWnd) {
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    *wcsrchr(path, L'\\') = L'\0';
+
+    std::wstring searchPath = std::wstring(path) + L"\\*";
+    WIN32_FIND_DATAW findData;
+    HANDLE hFind = FindFirstFileW(searchPath.c_str(), &findData);
+
+    if (hFind == INVALID_HANDLE_VALUE) {
+        AddHistory(L"FEHLER: Verzeichnisinhalt konnte nicht gelesen werden.");
+        return;
+    }
+
+    AddHistory(L" Inhalt von " + std::wstring(path));
+    do {
+        if (wcscmp(findData.cFileName, L".") != 0 && wcscmp(findData.cFileName, L"..") != 0) {
+            std::wstringstream ss;
+            if (findData.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) {
+                ss << L"<DIR>    " << findData.cFileName;
+            }
+            else {
+                ss << L"         " << findData.cFileName;
+            }
+            AddHistory(ss.str());
+        }
+    } while (FindNextFileW(hFind, &findData) != 0);
+
+    FindClose(hFind);
+}
+
+void Type(const std::wstring& filename, HWND hWnd) {
+    wchar_t path[MAX_PATH];
+    GetModuleFileNameW(NULL, path, MAX_PATH);
+    *wcsrchr(path, L'\\') = L'\0';
+    std::wstring fullPath = std::wstring(path) + L"\\" + filename;
+
+    std::wifstream file(fullPath);
+    if (file.is_open()) {
+        std::wstring line;
+        while (getline(file, line)) {
+            AddHistory(line);
+        }
+        file.close();
+    }
+    else {
+        AddHistory(L"FEHLER: Datei nicht gefunden oder konnte nicht geoeffnet werden.");
+    }
+}
+
+void Hostname(HWND hWnd) {
+    wchar_t computerName[MAX_COMPUTERNAME_LENGTH + 1];
+    DWORD size = MAX_COMPUTERNAME_LENGTH + 1;
+    if (GetComputerNameW(computerName, &size)) {
+        AddHistory(computerName);
+    }
+    else {
+        AddHistory(L"FEHLER: Computername konnte nicht abgerufen werden.");
+    }
+}
+
+void Whoami(HWND hWnd) {
+    wchar_t userName[UNLEN + 1];
+    DWORD size = UNLEN + 1;
+    if (GetUserNameW(userName, &size)) {
+        AddHistory(userName);
+    }
+    else {
+        AddHistory(L"FEHLER: Benutzername konnte nicht abgerufen werden.");
+    }
+}
+
+void Uptime(HWND hWnd) {
+    ULONGLONG ticks = GetTickCount64();
+    ULONGLONG seconds = ticks / 1000;
+    ULONGLONG minutes = seconds / 60;
+    ULONGLONG hours = minutes / 60;
+    ULONGLONG days = hours / 24;
+
+    std::wstringstream ss;
+    ss << L"System-Uptime: " << days << L" Tage, "
+        << hours % 24 << L" Stunden, "
+        << minutes % 60 << L" Minuten, "
+        << seconds % 60 << L" Sekunden";
+    AddHistory(ss.str());
+}
+
+LRESULT CALLBACK BlackoutWindowProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    switch (message) {
+    case WM_ERASEBKGND:
+        // Verhindert ein Flackern und zeigt einen schwarzen Hintergrund
+        return TRUE;
+    case WM_PAINT: {
+        PAINTSTRUCT ps;
+        HDC hdc = BeginPaint(hWnd, &ps);
+        RECT clientRect;
+        GetClientRect(hWnd, &clientRect);
+
+        // Füllt das Fenster explizit mit einem schwarzen Pinsel
+        HBRUSH hBrush = (HBRUSH)GetStockObject(BLACK_BRUSH);
+        FillRect(hdc, &clientRect, hBrush);
+
+        EndPaint(hWnd, &ps);
+        break;
+    }
+    case WM_CLOSE:
+    case WM_DESTROY:
+        // Wir wollen nicht, dass diese Fenster die Anwendung beenden
+        break;
+    default:
+        return DefWindowProcW(hWnd, message, wParam, lParam);
+    }
+    return 0;
+}
+
+
+BOOL RegisterBlackoutWindowClass(HINSTANCE hInstance) {
+    WNDCLASSEXW wc = { 0 };
+    wc.cbSize = sizeof(WNDCLASSEXW);
+    wc.lpfnWndProc = BlackoutWindowProc;
+    wc.hInstance = hInstance;
+    wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+    wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH); // Stellt den schwarzen Hintergrund sicher
+    wc.lpszClassName = BLACKOUT_CLASS_NAME;
+    return (RegisterClassExW(&wc) != 0);
+}
+
+/**
+ * Enum-Callback-Funktion, um fuer jeden erkannten Monitor (ausser dem Hauptmonitor)
+ * ein schwarzes, randloses Fenster zu erstellen, um den Bildschirm abzudecken.
+ */
+BOOL CALLBACK MonitorEnumProc(HMONITOR hMonitor, HDC hdcMonitor, LPRECT lprcMonitor, LPARAM dwData) {
+    HWND hWndMain = *(HWND*)dwData;
+    MONITORINFOEX monitorInfo;
+    monitorInfo.cbSize = sizeof(monitorInfo);
+
+    if (GetMonitorInfo(hMonitor, &monitorInfo)) {
+        // Pruefen, ob es der Primaermonitor ist
+        if (!(monitorInfo.dwFlags & MONITORINFOF_PRIMARY)) {
+            // Dies ist ein Sekundaermonitor -> Erstelle ein abdeckendes Fenster
+
+            int x = monitorInfo.rcMonitor.left;
+            int y = monitorInfo.rcMonitor.top;
+            int width = monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left;
+            int height = monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top;
+
+            // Erstelle ein Fenster, das diesen Monitor abdeckt
+            CreateWindowExW(
+                WS_EX_TOPMOST,          // Immer im Vordergrund
+                BLACKOUT_CLASS_NAME,    // KORREKTUR: Verwende die dedizierte Blackout-Klasse
+                NULL,
+                WS_POPUP | WS_VISIBLE,  // Randlos und sichtbar
+                x, y, width, height,
+                hWndMain,               // Hauptfenster als Owner/Parent
+                NULL, NULL, NULL
+            );
+        }
+    }
+    return TRUE; // Weiter zur Aufzaehlung des naechsten Monitors
+}
+
+void CoverSecondaryMonitors(HWND hWndMain) {
+    EnumDisplayMonitors(NULL, NULL, MonitorEnumProc, (LPARAM)&hWndMain);
+}
 
 /**
  * PING-Implementierung
@@ -119,7 +477,7 @@ void Ping(const std::wstring& host, HWND hWnd) {
     }
 
     char sendData[32] = "Data Buffer";
-    DWORD replySize = sizeof(ICMP_ECHO_REPLY) + sizeof(sendData);
+    DWORD replySize = sizeof(ICMP_ECHO_REPLY) + sizeof(sendData) + 8;
     BYTE* replyBuffer = new BYTE[replySize];
 
     SOCKADDR_IN* sockaddr_ipv4 = (struct sockaddr_in*)result->ai_addr;
@@ -369,6 +727,37 @@ void ProcessCommand(HWND hWnd, const std::wstring& command) {
         if (arg1.empty()) AddHistory(L"FEHLER: Hostname oder IP-Adresse erforderlich.");
         else Ping(arg1, hWnd);
     }
+    else if (cmd == L"IPCONFIG") {
+        IpConfig(hWnd);
+    }
+    else if (cmd == L"SYSTEMINFO") {
+        SystemInfo(hWnd);
+    }
+    else if (cmd == L"TASKLIST") {
+        TaskList(hWnd);
+    }
+    else if (cmd == L"NETSTAT") {
+        Netstat(hWnd);
+    }
+    else if (cmd == L"VOL") {
+        Vol(hWnd);
+    }
+    else if (cmd == L"DIR") {
+        Dir(hWnd);
+    }
+    else if (cmd == L"TYPE") {
+        if (arg1.empty()) AddHistory(L"FEHLER: Dateiname erforderlich.");
+        else Type(arg1, hWnd);
+    }
+    else if (cmd == L"HOSTNAME") {
+        Hostname(hWnd);
+    }
+    else if (cmd == L"WHOAMI") {
+        Whoami(hWnd);
+    }
+    else if (cmd == L"UPTIME") {
+        Uptime(hWnd);
+    }
     else if (cmd == L"VER") {
         AddHistory(L"Terminal Clock Version 1.1");
     }
@@ -469,6 +858,10 @@ void ProcessCommand(HWND hWnd, const std::wstring& command) {
 }
 
 BOOL RegisterClockWindowClass(HINSTANCE hInstance) {
+
+    if (!RegisterBlackoutWindowClass(hInstance)) {
+        return FALSE;
+    }
     WNDCLASSEXW wc = { 0 };
     wc.cbSize = sizeof(WNDCLASSEXW);
     wc.lpfnWndProc = ClockWindowProc;
@@ -485,7 +878,11 @@ BOOL RegisterClockWindowClass(HINSTANCE hInstance) {
 HWND CreateClockWindow(HINSTANCE hInstance, int nCmdShow) {
     // Initialisiere Winsock
     WSADATA wsaData;
-    WSAStartup(MAKEWORD(2, 2), &wsaData);
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        // Fehlerbehandlung, z.B. eine Nachricht anzeigen und beenden
+        MessageBoxW(NULL, L"WSAStartup fehlgeschlagen", L"Fehler", MB_OK | MB_ICONERROR);
+        return NULL;
+    }
 
     int screenWidth = GetSystemMetrics(SM_CXSCREEN);
     int screenHeight = GetSystemMetrics(SM_CYSCREEN);
@@ -515,6 +912,7 @@ HWND CreateClockWindow(HINSTANCE hInstance, int nCmdShow) {
         ShowWindow(hWnd, nCmdShow);
         UpdateWindow(hWnd);
         SetTimer(hWnd, CLOCK_TIMER_ID, 50, NULL);
+        CoverSecondaryMonitors(hWnd);
     }
     return hWnd;
 }
